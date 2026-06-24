@@ -11,6 +11,8 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -74,6 +76,10 @@ jobs:
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Build with Next.js
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+          PLAYER1_ID: ${{ secrets.PLAYER1_ID }}
+          PLAYER2_ID: ${{ secrets.PLAYER2_ID }}
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

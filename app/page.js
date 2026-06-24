@@ -4,12 +4,75 @@ import {
 } from "lucide-react";
 
 // ---- DANE PLACEHOLDER (podmień na swoje / podepnij dane z trackera) ----
-const PLAYERS = [
-  { id: "p1", name: "Gracz 1", initials: "G1", accent: "#FFD700", side: "left",
-    rank: "Unranked", lp: "-", games: 0, wl: "0W / 0L", wr: "-" },
-  { id: "p2", name: "Gracz 2", initials: "G2", accent: "#7dd3fc", side: "right",
-    rank: "Unranked", lp: "-", games: 0, wl: "0W / 0L", wr: "-" },
-];
+
+async function fetchPlayerData(playerIdConfig, defaultName, defaultInitials, accent, side) {
+  const defaultPlayer = {
+    id: defaultInitials.toLowerCase(), name: defaultName, initials: defaultInitials,
+    accent, side, rank: "Unranked", lp: "-", games: 0, wl: "0W / 0L", wr: "-"
+  };
+
+  const riotApiKey = process.env.RIOT_API_KEY;
+  if (!riotApiKey || !playerIdConfig) return defaultPlayer;
+
+  const parts = playerIdConfig.split("#");
+  if (parts.length !== 2) return defaultPlayer;
+  const gameName = parts[0];
+  const tagLine = parts[1];
+
+  try {
+    const accountRes = await fetch(`https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`, {
+      headers: { "X-Riot-Token": riotApiKey }
+    });
+    if (!accountRes.ok) throw new Error("Account not found");
+    const accountData = await accountRes.json();
+    const puuid = accountData.puuid;
+    const realName = accountData.gameName;
+
+    const region = process.env.RIOT_REGION || "eun1";
+    
+    const summonerRes = await fetch(`https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`, {
+      headers: { "X-Riot-Token": riotApiKey }
+    });
+    if (!summonerRes.ok) throw new Error("Summoner not found");
+    const summonerData = await summonerRes.json();
+    const summonerId = summonerData.id;
+
+    const leagueRes = await fetch(`https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`, {
+      headers: { "X-Riot-Token": riotApiKey }
+    });
+    if (!leagueRes.ok) throw new Error("League not found");
+    const leagueData = await leagueRes.json();
+
+    const soloq = leagueData.find(q => q.queueType === "RANKED_SOLO_5x5");
+    
+    if (soloq) {
+      const wins = soloq.wins;
+      const losses = soloq.losses;
+      const total = wins + losses;
+      const wr = total > 0 ? Math.round((wins / total) * 100) + "%" : "-";
+      const rankStr = `${soloq.tier.charAt(0) + soloq.tier.slice(1).toLowerCase()} ${soloq.rank}`;
+      
+      return {
+        id: defaultPlayer.id,
+        name: realName,
+        initials: realName.substring(0, 2).toUpperCase(),
+        accent,
+        side,
+        rank: rankStr,
+        lp: `${soloq.leaguePoints} LP`,
+        games: total,
+        wl: `${wins}W / ${losses}L`,
+        wr: wr
+      };
+    } else {
+      return { ...defaultPlayer, name: realName, initials: realName.substring(0, 2).toUpperCase() };
+    }
+  } catch (error) {
+    console.error(`Failed to fetch data for ${playerIdConfig}:`, error);
+    return defaultPlayer;
+  }
+}
+
 
 const TIERS = [
   { name: "Unranked", color: "#737373", top: 92 },
@@ -41,24 +104,31 @@ const PACKAGES = [
     points: ["Coach pomaga na żywo", "Obowiązuje jedną grę", "Coach może się powtarzać"], featured: false },
 ];
 
-export default function Page() {
+export default async function Page() {
+  const p1Id = process.env.PLAYER1_ID || "Gracz1#EUNE";
+  const p2Id = process.env.PLAYER2_ID || "Gracz2#EUNE";
+
+  const p1 = await fetchPlayerData(p1Id, "Gracz 1", "G1", "#FFD700", "left");
+  const p2 = await fetchPlayerData(p2Id, "Gracz 2", "G2", "#7dd3fc", "right");
+  const players = [p1, p2];
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#080a0f]">
-      <Hero />
-      <Intro />
+      <Hero players={players} />
+      <Intro players={players} />
       <Generator />
-      <RequestHistory />
+      <RequestHistory players={players} />
       <Packages />
       <ViewerDraw />
       <footer className="border-t border-white/10 py-4 text-center text-xs text-white/40">
-        Szkielet — dane są placeholderem. Podmień zawodników w <code>app/page.js</code>.
+        Szkielet — dane są parsowane z Riot API. Ustaw sekrety (RIOT_API_KEY, PLAYER1_ID, PLAYER2_ID) na GitHubie.
       </footer>
     </main>
   );
 }
 
 /* ---------------- HERO ---------------- */
-function Hero() {
+function Hero({ players }) {
   return (
     <section className="relative overflow-hidden bg-[#080a0f]" style={{ height: "min(46rem, calc(100dvh - 3.5rem))" }}>
       {/* tło zamiast hero_vs.webp: split red/blue + VS */}
@@ -70,15 +140,15 @@ function Hero() {
       {/* Overlay z kartami zawodników */}
       <div className="absolute inset-x-0 bottom-0 bg-[#05070b]/70 px-4 pb-4 pt-3 backdrop-blur-sm sm:px-6 lg:px-8">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-end">
-          <PlayerCard player={PLAYERS[0]} />
+          <PlayerCard player={players[0]} />
           <div className="hidden self-stretch place-items-center lg:grid">
             <div className="grid h-20 w-20 place-items-center rounded-full border border-[#FFD700]/40 bg-[#05070b]/90 text-[#FFD700] shadow-[0_0_22px_rgba(255,215,0,0.2)]">
               <MountainSnow className="h-8 w-8" />
             </div>
           </div>
-          <PlayerCard player={PLAYERS[1]} />
+          <PlayerCard player={players[1]} />
         </div>
-        <ClimbTrack />
+        <ClimbTrack players={players} />
       </div>
     </section>
   );
@@ -140,21 +210,21 @@ function Stat({ label, value }) {
 }
 
 /* ---------------- CLIMB TRACK ---------------- */
-function ClimbTrack() {
+function ClimbTrack({ players }) {
   return (
     <section className="relative pt-1">
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3">
         <div className="min-w-0">
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.14em]" style={{ color: "#FFD700" }}>{PLAYERS[0].name}</p>
-          <p className="mt-0.5 font-mono text-[0.8rem] font-black text-white/70 sm:text-sm">Unranked / -</p>
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.14em]" style={{ color: "#FFD700" }}>{players[0].name}</p>
+          <p className="mt-0.5 font-mono text-[0.8rem] font-black text-white/70 sm:text-sm">{players[0].rank} / {players[0].lp}</p>
         </div>
         <div className="min-w-0 text-center">
           <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-white/36">Wspinaczka na Śnieżkę</p>
           <p className="mt-0.5 font-mono text-xs font-black text-white/62">Ten sam poziom</p>
         </div>
         <div className="min-w-0 text-right">
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.14em]" style={{ color: "#7dd3fc" }}>{PLAYERS[1].name}</p>
-          <p className="mt-0.5 font-mono text-[0.8rem] font-black text-white/70 sm:text-sm">Unranked / -</p>
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.14em]" style={{ color: "#7dd3fc" }}>{players[1].name}</p>
+          <p className="mt-0.5 font-mono text-[0.8rem] font-black text-white/70 sm:text-sm">{players[0].rank} / {players[0].lp}</p>
         </div>
       </div>
 
@@ -236,7 +306,7 @@ function Stickman({ color, left, delay }) {
 }
 
 /* ---------------- INTRO ---------------- */
-function Intro() {
+function Intro({ players }) {
   return (
     <section className="border-t border-white/10 bg-[#080a0f]">
       <div className="mx-auto grid max-w-6xl gap-4 px-4 py-7 sm:px-6 lg:grid-cols-[1fr_auto_auto] lg:items-center lg:px-8">
@@ -247,7 +317,7 @@ function Intro() {
             Profile zawodników, ranking live, W/L, LP, zasady, harmonogram i requesty widzów.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {PLAYERS.map((p) => (
+            {players.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
                 <span className="min-w-28 text-xs font-black text-white/72">{p.name}</span>
                 <SocialBtn label="Discord" /><SocialBtn label="Instagram" />
@@ -316,7 +386,7 @@ function Generator() {
 }
 
 /* ---------------- REQUEST HISTORY ---------------- */
-function RequestHistory() {
+function RequestHistory({ players }) {
   return (
     <section className="border-t border-white/10 bg-[#080a0f]">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -338,7 +408,7 @@ function RequestHistory() {
         <div className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-[#0d1118]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <div className="flex flex-wrap gap-2">
-              {PLAYERS.map((p) => (
+              {players.map((p) => (
                 <span key={p.id} className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-2.5 py-1.5 text-xs font-black text-white/72">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.accent }} />{p.name}
                 </span>
