@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { background: #080a0f; color: #e6edf6; }
+
+/* --- Roulette (generator) --- */
+@keyframes roulette-slide { from { transform: translate3d(0,0,0); } to { transform: translate3d(-50%,0,0); } }
+@keyframes roulette-slide-rev { from { transform: translate3d(-50%,0,0); } to { transform: translate3d(0,0,0); } }
+.champion-track { animation: roulette-slide 24s linear infinite; }
+.item-track { animation: roulette-slide-rev 16s linear infinite; }
+
+/* --- Stickman climber --- */
+@keyframes stick-hike { 0%,100% { transform: translate3d(-50%,-50%,0) translateY(1px); } 50% { transform: translate3d(-50%,-50%,0) translateY(-2px); } }
+@keyframes leg-left { 0%,100% { transform: rotate(28deg); } 50% { transform: rotate(-34deg); } }
+@keyframes leg-right { 0%,100% { transform: rotate(-34deg); } 50% { transform: rotate(28deg); } }
+@keyframes arm-left { 0%,100% { transform: rotate(-32deg); } 50% { transform: rotate(28deg); } }
+@keyframes arm-right { 0%,100% { transform: rotate(28deg); } 50% { transform: rotate(-32deg); } }
+.stick-walker { animation: stick-hike .74s ease-in-out infinite; will-change: transform; }
+.limb { animation-duration: .46s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; transform-origin: 50% 0%; }
+.leg-left { animation-name: leg-left; }
+.leg-right { animation-name: leg-right; }
+.arm-left { animation-name: arm-left; }
+.arm-right { animation-name: arm-right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .champion-track, .item-track, .stick-walker, .limb { animation: none !important; }
+}
